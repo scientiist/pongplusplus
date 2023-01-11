@@ -395,8 +395,6 @@ int main()
 #include <cstring>
 #pragma endregion
 
-#define PGE_VER 222
-
 // O------------------------------------------------------------------------------O
 // | COMPILER CONFIGURATION ODDITIES                                              |
 // O------------------------------------------------------------------------------O
@@ -3940,7 +3938,7 @@ namespace olc
 		{
 			nLastFPS = nFrameCount;
 			fFrameTimer -= 1.0f;
-			std::string sTitle = "OneLoneCoder.com - Pixel Game Engine - " + sAppName + " - FPS: " + std::to_string(nFrameCount);
+			std::string sTitle = "" + sAppName + " - FPS: " + std::to_string(nFrameCount);
 			platform->SetWindowTitle(sTitle);
 			nFrameCount = 0;
 		}

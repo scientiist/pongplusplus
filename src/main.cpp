@@ -3,19 +3,65 @@
 #include "olcPixelGameEngine.hpp"
 
 #include <iostream>
-
+#define Vector2 olc::vf2d
 #pragma region Physics Functions
 
-bool GetOverlapsAABB(olc::vf2d& aPos, olc::vf2d& aSize, olc::vf2d& bPos, olc::vf2d& bSize)
+bool GetOverlapsAABB(const Vector2& aPos, const Vector2& aSize, const Vector2& bPos, const olc::vf2d& bSize)
 {
+    auto absDistX = std::abs(aPos.x - bPos.x);
+    auto absDistY = std::abs(aPos.y - bPos.y);
 
-}
-const olc::vf2d GetSeparationAABB(olc::vf2d& aPos, olc::vf2d aSize, olc::vf2d bPos, olc::vf2d bSize) {
+    auto sumW = aSize.x + bSize.x;
+    auto sumH = aSize.y + bSize.y;
 
+    if (absDistY >= sumH || absDistX >= sumW)
+        return false;
+    return true;
 }
-const olc::vf2d GetNormalAABB(olc::vf2d& aPos, olc::vf2d& aSize, olc::vf2d& bPos, olc::vf2d& bSize)
+olc::vf2d GetSeparationAABB(const olc::vf2d& aPos, const olc::vf2d& aSize, const olc::vf2d& bPos, const olc::vf2d& bSize) {
+    auto distX = aPos.x - bPos.x;
+    auto distY = aPos.y - bPos.y;
+
+    auto absDistX = std::abs(distX);
+    auto absDistY = std::abs(distY);
+
+    auto sumW = aSize.x + bSize.x;
+    auto sumH = aSize.y + bSize.y;
+
+
+    auto sx = sumW - absDistX;
+    auto sy = sumH - absDistY;
+
+    if (sx > sy) {
+        if (sy > 0)
+            sx = 0;
+    } else {
+        if (sx > 0)
+            sy = 0;
+    }
+
+    if (distX < 0)
+        sx = -sx;
+
+    if (distY < 0)
+        sy = -sy;
+
+    return {sx, sy};
+}
+olc::vf2d GetNormalAABB(const olc::vf2d& separation, const olc::vf2d& velocity)
 {
+    auto d = std::sqrt(separation.x * separation.x + separation.y * separation.y);
 
+    auto nx = separation.x / d;
+    auto ny = separation.y / d;
+
+    auto ps = velocity.x * nx + velocity.y * ny;
+
+    if (ps <= 0)
+    {
+        return {nx, ny};
+    }
+    return {0,0};
 }
 
 struct LineLineIntersectResult
@@ -23,17 +69,17 @@ struct LineLineIntersectResult
 public:
     bool intersect;
     olc::vf2d position;
-    LineLineIntersectResult(bool res)
+    explicit LineLineIntersectResult(bool res)
     {
         intersect = res;
     }
-    LineLineIntersectResult(olc::vf2d& pos)
+    explicit LineLineIntersectResult(olc::vf2d& pos)
     {
         position = pos;
         intersect = true;
     }
 };
-const LineLineIntersectResult GetLineIntersects(olc::vf2d& a1, olc::vf2d& a2, olc::vf2d& b1, olc::vf2d& b2)
+LineLineIntersectResult GetLineIntersects(const olc::vf2d& a1, const olc::vf2d& a2, const olc::vf2d& b1, const olc::vf2d& b2)
 {
     olc::vf2d intersection = {0,0};
     auto b = a2 - a1;
@@ -65,14 +111,70 @@ const LineLineIntersectResult GetLineIntersects(olc::vf2d& a1, olc::vf2d& a2, ol
 enum Face {F_LEFT, F_TOP, F_RIGHT, F_BOTTOM};
 struct LineRectIntersectResult
 {
+public:
     bool intersect;
     olc::vf2d position;
     Face face;
+    LineRectIntersectResult(bool intersect)
+    {
+        intersect = false;
+        position = {0,0};
+        face = F_TOP; // ?
+    }
+    LineRectIntersectResult(olc::vf2d pos, Face _face)
+    {
+        position = pos;
+        face = _face;
+        intersect = true;
+    }
 };
 
-const LineRectIntersectResult GetLineRectIntersect(olc::vf2d& segA, olc::vf2d& segB, olc::vf2d& rectPos, olc::vf2d& rectSize)
+const LineRectIntersectResult GetLineRectIntersect(const olc::vf2d& segA, const olc::vf2d& segB, const olc::vf2d& rectPos, const olc::vf2d& rectSize)
 {
+    auto intersection = olc::vf2d(0,0);
+    auto collidingFace = F_TOP;
 
+
+    auto rect_topleft = rectPos - rectSize;
+    auto rect_bottomright = rectPos + rectSize;
+    auto rect_bottomleft = rectPos + olc::vf2d(-rectSize.x, rectSize.y);
+    auto rect_topright = rectPos + olc::vf2d(rectSize.x, -rectSize.y);
+
+
+    auto top_hits = GetLineIntersects(segA, segB, rect_topleft, rect_topright);
+    auto bottom_hits = GetLineIntersects(segA, segB, rect_bottomleft, rect_bottomright);
+    auto left_hits = GetLineIntersects(segA, segB, rect_topleft, rect_bottomleft);
+    auto right_hits = GetLineIntersects(segA, segB, rect_topright, rect_bottomright);
+
+    if (top_hits.intersect || bottom_hits.intersect || left_hits.intersect || right_hits.intersect)
+    {
+        intersection = segB;
+
+        if (top_hits.intersect && (segA-top_hits.position).mag() < (segA-intersection).mag())
+        {
+            intersection = top_hits.position;
+            collidingFace = F_TOP;
+        }
+
+        if (bottom_hits.intersect && (segA-bottom_hits.position).mag() < (segA-intersection).mag())
+        {
+            intersection = bottom_hits.position;
+            collidingFace = F_BOTTOM;
+        }
+
+        if (left_hits.intersect && (segA-left_hits.position).mag() < (segA-intersection).mag())
+        {
+            intersection = left_hits.position;
+            collidingFace = F_LEFT;
+        }
+        if (right_hits.intersect && (segA-right_hits.position).mag() < (segA-intersection).mag())
+        {
+            intersection = right_hits.position;
+            collidingFace = F_RIGHT;
+        }
+        return LineRectIntersectResult(intersection, collidingFace);
+    }
+    return LineRectIntersectResult(false);
 }
 
 #pragma endregion
@@ -128,10 +230,7 @@ public:
     }
 };
 
-enum PaddleSide
-{
-    LEFT, RIGHT
-};
+enum PaddleSide {P_LEFT, P_RIGHT};
 
 class Paddle : public Entity
 {
@@ -140,7 +239,8 @@ public:
     PaddleSide side;
     int score = 0;
 
-    int yposition = 128;
+    olc::vf2d position = {10, 128};
+
     olc::vi2d size = olc::vi2d(5, 15);
 
     Paddle()
@@ -151,20 +251,16 @@ public:
     {
         engine = engineRef;
         this->side = side;
+        auto bounds = engine->GetScreenSize();
+        if (side == P_RIGHT)
+        {
+            position.x = bounds.x - 10;
+        }
     }
 
     void Reset()
     {
         //score = 0;
-
-    }
-
-    void MoveUp(float d)
-    {
-
-    }
-    void MoveDown(float d)
-    {
 
     }
 
@@ -175,20 +271,14 @@ public:
     void Draw() override
     {
         auto bounds = engine->GetScreenSize();
-
-        int xposition = 10;
         // Draw Paddle
-        if (side == RIGHT)
-        {
-            xposition = bounds.x - 10;
-        }
-        olc::vi2d position = olc::vi2d(xposition, yposition);
+
         engine->FillRect(position-size, size*2, olc::WHITE);
 
         olc::vi2d scoreCoords = {0,0};
         std::string scoreStr = std::to_string(score);
         // Draw Score
-        if (side == RIGHT)
+        if (side == P_RIGHT)
         {
             auto textDims = engine->GetTextSize(scoreStr);
             scoreCoords = {bounds.x-(textDims.x*2), 0};
@@ -198,10 +288,6 @@ public:
         engine->DrawString(scoreCoords, scoreStr, olc::WHITE, 2);
     }
 };
-
-
-
-
 
 
 class Pong : public olc::PixelGameEngine
@@ -216,13 +302,13 @@ public:
 
     Pong()
     {
-        rPaddle = Paddle(this,  RIGHT);
-        lPaddle = Paddle(this, LEFT);
+        rPaddle = Paddle(this,  P_RIGHT);
+        lPaddle = Paddle(this, P_LEFT);
         ball = Ball(this);
 
-
         time = 0;
-        sAppName = "Example";
+        sAppName = "Pong in C++ by Josh";
+
 
     }
 public:
@@ -241,12 +327,37 @@ public:
         rPaddle.Update(delta);
 
 
+        // TODO:
+        // Left paddle - Ball Collision
+        auto ballSize = olc::vf2d(ball.radius, ball.radius);
+        bool lpOverlaps = GetOverlapsAABB(lPaddle.position, lPaddle.size, ball.position, ballSize);
+
+        if (lpOverlaps)
+        {
+            auto sep = GetSeparationAABB(lPaddle.position, lPaddle.size, ball.position, ballSize);
+            auto norm = GetNormalAABB(sep, ball.velocity);
+            ball.position -= sep;
+            ball.velocity.x = -ball.velocity.x;
+
+        }
+
+        auto rpOverlaps = GetOverlapsAABB(rPaddle.position, rPaddle.size, ball.position, ballSize);
+
+        if (rpOverlaps)
+        {
+            auto sep = GetSeparationAABB(rPaddle.position, rPaddle.size, ball.position, ballSize);
+            auto norm = GetNormalAABB(sep, ball.velocity);
+
+            ball.position -= sep;
+            ball.velocity.x = -ball.velocity.x;
+        }
+
         // Graphics
         Clear(olc::BLACK);
+
         ball.Draw();
         lPaddle.Draw();
         rPaddle.Draw();
-
         return true;
     }
 };
