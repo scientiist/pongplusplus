@@ -1,6 +1,6 @@
 #define OLC_PGE_APPLICATION
 
-#include "olcPixelGameEngine.hpp"
+#include "../../tetris/src/olcPixelGameEngine.hpp"
 
 #include <iostream>
 #define Vector2 olc::vf2d
@@ -207,6 +207,7 @@ public:
     olc::vf2d position = {128,128};
     olc::vf2d velocity = {-30,0};
     int radius = 4;
+    int speedModifier = 1;
     Ball()
     {
 
@@ -218,6 +219,7 @@ public:
     void Reset()
     {
         position = {128, 128};
+        velocity = {-30, 0};
     }
     void Update(float delta) override
     {
@@ -240,6 +242,7 @@ public:
     int score = 0;
 
     olc::vf2d position = {10, 128};
+    olc::vf2d velocity = {0,0};
 
     olc::vi2d size = olc::vi2d(5, 15);
 
@@ -267,6 +270,8 @@ public:
     void Update(float delta) override
     {
 
+        this->position += this->velocity*delta;
+        this->velocity *= (1-(delta*8));
     }
     void Draw() override
     {
@@ -320,6 +325,8 @@ public:
     bool OnUserUpdate(float delta) override
     {
 
+        auto bounds = GetScreenSize();
+
         // TODO: Decouple logic and graphics
         // Logic
         ball.Update(delta);
@@ -327,7 +334,6 @@ public:
         rPaddle.Update(delta);
 
 
-        // TODO:
         // Left paddle - Ball Collision
         auto ballSize = olc::vf2d(ball.radius, ball.radius);
         bool lpOverlaps = GetOverlapsAABB(lPaddle.position, lPaddle.size, ball.position, ballSize);
@@ -337,19 +343,65 @@ public:
             auto sep = GetSeparationAABB(lPaddle.position, lPaddle.size, ball.position, ballSize);
             auto norm = GetNormalAABB(sep, ball.velocity);
             ball.position -= sep;
-            ball.velocity.x = -ball.velocity.x;
+
+            ball.velocity.x = -(ball.velocity.x*1.5);
+            ball.velocity.y = -ball.velocity.y;
+            ball.velocity.y += lPaddle.velocity.y;
 
         }
 
+        // Right paddle - Ball Collision
         auto rpOverlaps = GetOverlapsAABB(rPaddle.position, rPaddle.size, ball.position, ballSize);
-
         if (rpOverlaps)
         {
             auto sep = GetSeparationAABB(rPaddle.position, rPaddle.size, ball.position, ballSize);
             auto norm = GetNormalAABB(sep, ball.velocity);
 
             ball.position -= sep;
-            ball.velocity.x = -ball.velocity.x;
+            ball.velocity.x = -(ball.velocity.x*1.5);
+            ball.velocity.y = -ball.velocity.y;
+            ball.velocity.y += rPaddle.velocity.y;
+        }
+
+        // Boundary collides
+
+        if (ball.position.y < 0 || ball.position.y > bounds.y)
+        {
+            ball.velocity.y = -ball.velocity.y;
+        }
+
+        if (ball.position.x < 0)
+        {
+            lPaddle.score +=1;
+            ball.Reset();
+            lPaddle.position.y = 128;
+            rPaddle.position.y = 128;
+        }
+
+        if (ball.position.x > bounds.x) {
+            rPaddle.score +=1;
+            ball.Reset();
+            lPaddle.position.y = 128;
+            rPaddle.position.y = 128;
+        }
+
+
+        // Paddle Inputs
+        if (this->GetKey(olc::Key::W).bHeld)
+        {
+            lPaddle.velocity.y += delta*300;
+        }
+        if (this->GetKey(olc::Key::S).bHeld)
+        {
+            lPaddle.velocity.y -= delta*300;
+        }
+        if (this->GetKey(olc::Key::UP).bHeld)
+        {
+            rPaddle.velocity.y -= delta*300;
+        }
+        if (this->GetKey(olc::Key::DOWN).bHeld)
+        {
+            rPaddle.velocity.y += delta*300;
         }
 
         // Graphics

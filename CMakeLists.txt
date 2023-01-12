@@ -10,6 +10,6 @@ include_directories(${X11_INCLUDE_DIR})
 link_directories(${X11_LIBRARIES})
 
 
-add_executable(${PROJECT_NAME} src/olcPixelGameEngine.hpp src/main.cpp)
+add_executable(${PROJECT_NAME} ../tetris/src/olcPixelGameEngine.hpp src/main.cpp)
 target_include_directories(${PROJECT_NAME} PUBLIC "src")
 target_link_libraries(${PROJECT_NAME} ${X11_LIBRARIES} GL png stdc++fs pthread)
